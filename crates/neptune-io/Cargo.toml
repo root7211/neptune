@@ -1,0 +1,12 @@
+[package]
+name = "neptune-io"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "I/O utilities for the Neptune package manager"
+
+[dependencies]
+anyhow.workspace = true
+fs2.workspace = true
+neptune-core = { path = "../neptune-core" }

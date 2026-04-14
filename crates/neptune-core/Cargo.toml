@@ -1,0 +1,20 @@
+[package]
+name = "neptune-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core library for the Neptune package manager"
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+serde = { workspace = true }
+toml.workspace = true
+semver.workspace = true
+sha2.workspace = true
+hex.workspace = true
+directories.workspace = true
+fs2.workspace = true
+tempfile.workspace = true
+tracing.workspace = true

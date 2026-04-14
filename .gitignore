@@ -1,0 +1,10 @@
+/target
+**/.neptune/
+nelua_modules/
+
+# editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
