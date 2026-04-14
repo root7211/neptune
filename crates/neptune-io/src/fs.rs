@@ -78,7 +78,7 @@ pub fn symlink_dir(src: &Path, dst: &Path) -> Result<bool> {
         if create_junction(src, dst).is_ok() {
             return Ok(true);
         }
-        return Ok(false);
+        Ok(false)
     }
 
     #[cfg(not(any(unix, windows)))]
