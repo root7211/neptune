@@ -1,7 +1,7 @@
 # Neptune
 
 <p align="center">
-  <img src="assets/logo.svg" alt="Neptune logo" width="200"/>
+  <img src="assets/logo.png" alt="Neptune logo" width="200"/>
 </p>
 
 A package manager for [Nelua](https://nelua.io), written in Rust.
