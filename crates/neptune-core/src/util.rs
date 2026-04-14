@@ -6,8 +6,7 @@ use anyhow::{Context, Result};
 /// 修复了 v0.2 中固定 .tmp 后缀导致的并发竞争问题，并补充了 fsync。
 pub fn atomic_write(path: &Path, data: &[u8]) -> Result<()> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    fs::create_dir_all(parent)
-        .with_context(|| format!("创建目录失败: {}", parent.display()))?;
+    fs::create_dir_all(parent).with_context(|| format!("创建目录失败: {}", parent.display()))?;
 
     // 使用 tempfile 在同一目录下创建随机命名的临时文件，避免并发冲突
     let mut tmp = tempfile::Builder::new()
@@ -38,8 +37,7 @@ pub fn atomic_write(path: &Path, data: &[u8]) -> Result<()> {
 
 /// 创建目录（包括所有父目录）
 pub fn ensure_dir(path: &Path) -> Result<()> {
-    std::fs::create_dir_all(path)
-        .with_context(|| format!("创建目录失败: {}", path.display()))
+    std::fs::create_dir_all(path).with_context(|| format!("创建目录失败: {}", path.display()))
 }
 
 pub fn sha256_of_bytes(data: &[u8]) -> String {
@@ -125,7 +123,10 @@ pub fn sha256_of_dir_filtered(dir: &Path, excludes: &[&str]) -> Result<String> {
     Ok(hex::encode(hasher.finalize()))
 }
 
-fn collect_files_filtered(dir: &Path, excludes: &[&str]) -> Result<Vec<(String, std::path::PathBuf)>> {
+fn collect_files_filtered(
+    dir: &Path,
+    excludes: &[&str],
+) -> Result<Vec<(String, std::path::PathBuf)>> {
     let mut result = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
     while let Some(current) = stack.pop() {

@@ -17,6 +17,7 @@ pub fn lock_dir(dir: &Path) -> Result<DirLock> {
     let lock_path = dir.join(".npt-lock");
     let f = fs::OpenOptions::new()
         .create(true)
+        .truncate(false)
         .read(true)
         .write(true)
         .open(&lock_path)
@@ -30,8 +31,7 @@ pub fn lock_dir(dir: &Path) -> Result<DirLock> {
 }
 
 pub fn ensure_dir(path: &Path) -> Result<()> {
-    std::fs::create_dir_all(path)
-        .with_context(|| format!("创建目录失败: {}", path.display()))
+    std::fs::create_dir_all(path).with_context(|| format!("创建目录失败: {}", path.display()))
 }
 
 pub fn remove_if_exists(path: &Path) -> Result<()> {
@@ -65,7 +65,7 @@ pub fn symlink_dir(src: &Path, dst: &Path) -> Result<bool> {
         unix_fs::symlink(src, dst).with_context(|| {
             format!("创建 symlink 失败: {} -> {}", dst.display(), src.display())
         })?;
-        return Ok(true);
+        Ok(true)
     }
 
     #[cfg(windows)]
@@ -92,8 +92,8 @@ pub fn symlink_dir(src: &Path, dst: &Path) -> Result<bool> {
 /// 递归复制目录（只复制普通文件和目录，跳过符号链接避免循环）
 pub fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     ensure_dir(dst)?;
-    for entry in std::fs::read_dir(src)
-        .with_context(|| format!("读取目录失败: {}", src.display()))?
+    for entry in
+        std::fs::read_dir(src).with_context(|| format!("读取目录失败: {}", src.display()))?
     {
         let entry = entry?;
         let ft = entry.file_type()?;
@@ -105,9 +105,8 @@ pub fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
             if let Some(parent) = to.parent() {
                 ensure_dir(parent)?;
             }
-            std::fs::copy(&from, &to).with_context(|| {
-                format!("复制文件失败: {} -> {}", from.display(), to.display())
-            })?;
+            std::fs::copy(&from, &to)
+                .with_context(|| format!("复制文件失败: {} -> {}", from.display(), to.display()))?;
         }
         // 跳过符号链接，避免循环引用
     }
@@ -149,7 +148,9 @@ pub fn first_child_dir(parent: &Path) -> Result<Option<PathBuf>> {
 fn create_junction(src: &Path, dst: &Path) -> Result<()> {
     let status = std::process::Command::new("cmd")
         .args([
-            "/C", "mklink", "/J",
+            "/C",
+            "mklink",
+            "/J",
             &dst.to_string_lossy(),
             &src.to_string_lossy(),
         ])

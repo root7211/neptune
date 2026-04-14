@@ -9,7 +9,7 @@ use neptune_core::{
     lockfile::{LockedPackage, LockedSource, Lockfile, LOCK_VERSION},
     manifest::Manifest,
     paths,
-    resolver::{compute_path_content_hash, node_to_locked_package, Resolver, ResolvedSource},
+    resolver::{compute_path_content_hash, node_to_locked_package, ResolvedSource, Resolver},
 };
 
 #[derive(Parser, Debug)]
@@ -89,7 +89,10 @@ fn cmd_init(name: Option<String>, app: Option<String>, lib: Option<String>) -> R
     let root = cwd()?;
     let mf_path = root.join(paths::MANIFEST_FILE);
     if mf_path.exists() {
-        return Err(anyhow!("{} 已存在，如需重新初始化请手动删除", paths::MANIFEST_FILE));
+        return Err(anyhow!(
+            "{} 已存在，如需重新初始化请手动删除",
+            paths::MANIFEST_FILE
+        ));
     }
 
     let pname = name.unwrap_or_else(|| {
@@ -230,10 +233,8 @@ fn resolve_and_write_lockfile(
     let mut packages: Vec<LockedPackage> = Vec::new();
     for node in &result.packages {
         let content_sha = match &node.source {
-            ResolvedSource::Path { abs_path } => {
-                compute_path_content_hash(abs_path)
-                    .with_context(|| format!("计算 {} 的内容哈希失败", node.name))?
-            }
+            ResolvedSource::Path { abs_path } => compute_path_content_hash(abs_path)
+                .with_context(|| format!("计算 {} 的内容哈希失败", node.name))?,
             ResolvedSource::Git { url: _, rev } => {
                 // v0.3.1 修复 #1：rev 已是 resolve 阶段锁定的精确 commit hash，
                 // 直接用作 content_sha256，不再写空字符串。
@@ -259,7 +260,10 @@ fn resolve_and_write_lockfile(
         packages,
     };
     lf.write_to(lock_path)?;
-    println!("✓ 已生成 neptune.lock（包含 {} 个包，含间接依赖）", lf.packages.len());
+    println!(
+        "✓ 已生成 neptune.lock（包含 {} 个包，含间接依赖）",
+        lf.packages.len()
+    );
     Ok(lf)
 }
 
@@ -285,7 +289,11 @@ fn materialize_pkg(pkg: &LockedPackage, root: &Path, pkgs_root: &Path) -> Result
             let repo_dir = cache_dir.join(format!("{}-{}", sanitize(url), sanitize(rev)));
 
             if !repo_dir.exists() {
-                println!("  → 克隆 {} ({})", url, &rev[..std::cmp::min(12, rev.len())]);
+                println!(
+                    "  → 克隆 {} ({})",
+                    url,
+                    &rev[..std::cmp::min(12, rev.len())]
+                );
                 // 此时 rev 已是完整 commit hash，直接 clone + checkout
                 git_clone_and_checkout(url, rev, &repo_dir)?;
             }
@@ -466,7 +474,9 @@ fn cmd_tree() -> Result<()> {
         for pkg in &indirect {
             let source_info = match &pkg.source {
                 LockedSource::Path { path } => format!("path:{}", path),
-                LockedSource::Git { url, rev } => format!("git+{}#{}", url, &rev[..std::cmp::min(8, rev.len())]),
+                LockedSource::Git { url, rev } => {
+                    format!("git+{}#{}", url, &rev[..std::cmp::min(8, rev.len())])
+                }
                 LockedSource::Registry { url, .. } => format!("registry:{}", url),
             };
             println!("  {}@{} [{}]", pkg.name, pkg.version, source_info);
@@ -480,7 +490,9 @@ fn print_pkg_tree(pkg: &LockedPackage, all_pkgs: &[LockedPackage], depth: usize)
     let indent = "  ".repeat(depth);
     let source_info = match &pkg.source {
         LockedSource::Path { path } => format!("path:{}", path),
-        LockedSource::Git { url, rev } => format!("git+{}#{}", url, &rev[..std::cmp::min(8, rev.len())]),
+        LockedSource::Git { url, rev } => {
+            format!("git+{}#{}", url, &rev[..std::cmp::min(8, rev.len())])
+        }
         LockedSource::Registry { url, .. } => format!("registry:{}", url),
     };
     println!("{}{}@{} [{}]", indent, pkg.name, pkg.version, source_info);
@@ -505,7 +517,11 @@ fn cmd_doctor() -> Result<()> {
         ("nelua", "Nelua 编译器", &["--version"]),
         ("git", "Git 版本控制", &["--version"]),
         ("cc", "C 编译器（用于 Nelua 编译）", &["--version"]),
-        ("pkg-config", "pkg-config（用于 C 库探测，v0.6 需要）", &["--version"]),
+        (
+            "pkg-config",
+            "pkg-config（用于 C 库探测，v0.6 需要）",
+            &["--version"],
+        ),
     ];
 
     let mut all_ok = true;
@@ -570,7 +586,13 @@ fn git_clone_and_checkout(url: &str, rev: &str, dir: &Path) -> Result<()> {
 
 fn sanitize(s: &str) -> String {
     s.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 

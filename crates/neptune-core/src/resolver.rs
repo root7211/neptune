@@ -17,8 +17,7 @@ use semver::{Version, VersionReq};
 use crate::{
     lockfile::{LockedDep, LockedPackage, LockedSource},
     manifest::{DepSpec, Manifest},
-    paths,
-    util,
+    paths, util,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,9 +65,14 @@ pub struct ResolvedNode {
 /// 解析后的来源信息
 #[derive(Debug, Clone)]
 pub enum ResolvedSource {
-    Path { abs_path: PathBuf },
+    Path {
+        abs_path: PathBuf,
+    },
     /// v0.3.1：rev 字段已是 resolve 阶段确定的精确 commit hash
-    Git { url: String, rev: String },
+    Git {
+        url: String,
+        rev: String,
+    },
 }
 
 /// 冲突信息
@@ -97,10 +101,18 @@ impl std::fmt::Display for Conflict {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind {
             ConflictKind::SourceMismatch => {
-                writeln!(f, "来源冲突：包 \"{}\" 被多个依赖从不同来源引入：", self.package_name)?;
+                writeln!(
+                    f,
+                    "来源冲突：包 \"{}\" 被多个依赖从不同来源引入：",
+                    self.package_name
+                )?;
             }
             ConflictKind::VersionIncompatible => {
-                writeln!(f, "版本冲突：包 \"{}\" 被多个依赖以不兼容的版本要求引入：", self.package_name)?;
+                writeln!(
+                    f,
+                    "版本冲突：包 \"{}\" 被多个依赖以不兼容的版本要求引入：",
+                    self.package_name
+                )?;
             }
         }
         for d in &self.demands {
@@ -128,7 +140,9 @@ pub struct Resolver {
 
 impl Resolver {
     pub fn new(root: impl AsRef<Path>) -> Self {
-        Self { root: root.as_ref().to_path_buf() }
+        Self {
+            root: root.as_ref().to_path_buf(),
+        }
     }
 
     /// 从顶层 manifest 开始，BFS 递归解析所有依赖，返回解析结果。
@@ -144,19 +158,29 @@ impl Resolver {
         let mut queue: VecDeque<(String, DepSpec, String, PathBuf)> = VecDeque::new();
 
         for (name, spec) in &manifest.dependencies {
-            queue.push_back((name.clone(), spec.clone(), format!("root -> {}", name), self.root.clone()));
+            queue.push_back((
+                name.clone(),
+                spec.clone(),
+                format!("root -> {}", name),
+                self.root.clone(),
+            ));
         }
 
         let mut conflicts: Vec<Conflict> = Vec::new();
 
         while let Some((pkg_name, dep_spec, chain, base_dir)) = queue.pop_front() {
             let req_str = dep_spec_to_req_string(&dep_spec);
-            demands.entry(pkg_name.clone()).or_default().push((chain.clone(), req_str.clone()));
+            demands
+                .entry(pkg_name.clone())
+                .or_default()
+                .push((chain.clone(), req_str.clone()));
 
             // 解析来源，得到 PackageId（对 git 依赖会在此阶段 clone 并锁定 commit）
             let pkg_id = match self.dep_spec_to_package_id(&pkg_name, &dep_spec, &base_dir) {
                 Ok(id) => id,
-                Err(e) => return Err(e.context(format!("解析依赖 {} 失败（来自 {}）", pkg_name, chain))),
+                Err(e) => {
+                    return Err(e.context(format!("解析依赖 {} 失败（来自 {}）", pkg_name, chain)))
+                }
             };
 
             // 检测同名不同来源冲突
@@ -184,7 +208,8 @@ impl Resolver {
             // 首次见到这个包名，记录 id 并解析
             name_to_id.insert(pkg_name.clone(), pkg_id.clone());
 
-            let node = self.resolve_one(&pkg_name, &dep_spec, &base_dir)
+            let node = self
+                .resolve_one(&pkg_name, &dep_spec, &base_dir)
                 .with_context(|| format!("解析依赖 {} 失败（来自 {}）", pkg_name, chain))?;
 
             // 将子依赖入队，基准目录为该包的实际路径
@@ -193,13 +218,22 @@ impl Resolver {
                 ResolvedSource::Git { url, rev } => {
                     // Git 依赖的子依赖：使用 clone 后的缓存目录作为基准
                     let cache_dir = paths::project_dir(&self.root).join("cache").join("git");
-                    cache_dir.join(format!("{}-{}", sanitize_for_path(url), sanitize_for_path(rev)))
+                    cache_dir.join(format!(
+                        "{}-{}",
+                        sanitize_for_path(url),
+                        sanitize_for_path(rev)
+                    ))
                 }
             };
 
             for (child_name, child_spec) in &node.direct_deps {
                 let child_chain = format!("{} -> {}", chain, child_name);
-                queue.push_back((child_name.clone(), child_spec.clone(), child_chain, node_base.clone()));
+                queue.push_back((
+                    child_name.clone(),
+                    child_spec.clone(),
+                    child_chain,
+                    node_base.clone(),
+                ));
             }
 
             resolved.insert(pkg_id, node);
@@ -248,24 +282,41 @@ impl Resolver {
         // 拓扑排序（O(V+E)）
         let packages = topological_sort(resolved)?;
 
-        Ok(ResolveResult { packages, conflicts })
+        Ok(ResolveResult {
+            packages,
+            conflicts,
+        })
     }
 
     /// 根据 DepSpec 计算 PackageId。
     /// 对 git 依赖：在此阶段 clone 并 rev-parse HEAD，将精确 commit hash 作为指纹。
-    fn dep_spec_to_package_id(&self, name: &str, spec: &DepSpec, base_dir: &Path) -> Result<PackageId> {
+    fn dep_spec_to_package_id(
+        &self,
+        name: &str,
+        spec: &DepSpec,
+        base_dir: &Path,
+    ) -> Result<PackageId> {
         match spec {
             DepSpec::VersionReq(_) => Err(anyhow!(
                 "v0.3 原型暂不支持 registry 依赖（{}），请使用 path 或 git",
                 name
             )),
             DepSpec::Detailed { path: Some(p), .. } => {
-                let abs = base_dir.join(p).canonicalize()
+                let abs = base_dir
+                    .join(p)
+                    .canonicalize()
                     .with_context(|| format!("path 依赖 {} 不存在: {}", name, p))?;
                 Ok(PackageId::for_path(name, &abs))
             }
-            DepSpec::Detailed { git: Some(url), rev, tag, branch, .. } => {
-                let lock_rev = rev.as_deref()
+            DepSpec::Detailed {
+                git: Some(url),
+                rev,
+                tag,
+                branch,
+                ..
+            } => {
+                let lock_rev = rev
+                    .as_deref()
                     .or(tag.as_deref())
                     .or(branch.as_deref())
                     .unwrap_or("HEAD");
@@ -281,7 +332,11 @@ impl Resolver {
     fn git_ensure_and_resolve(&self, url: &str, rev: &str) -> Result<String> {
         let cache_dir = paths::project_dir(&self.root).join("cache").join("git");
         util::ensure_dir(&cache_dir)?;
-        let repo_dir = cache_dir.join(format!("{}-{}", sanitize_for_path(url), sanitize_for_path(rev)));
+        let repo_dir = cache_dir.join(format!(
+            "{}-{}",
+            sanitize_for_path(url),
+            sanitize_for_path(rev)
+        ));
 
         if !repo_dir.exists() {
             git_clone_and_checkout(url, rev, &repo_dir)?;
@@ -297,13 +352,29 @@ impl Resolver {
         match spec {
             DepSpec::VersionReq(v) => Err(anyhow!(
                 "v0.3 原型暂不支持 registry 依赖（{} = \"{}\"）；registry 支持将在 v0.4 实现",
-                name, v
+                name,
+                v
             )),
-            DepSpec::Detailed { git, rev, tag, branch, path, version, .. } => {
+            DepSpec::Detailed {
+                git,
+                rev,
+                tag,
+                branch,
+                path,
+                version,
+                ..
+            } => {
                 if let Some(p) = path {
                     self.resolve_path_dep(name, p, version.as_deref(), base_dir)
                 } else if let Some(url) = git {
-                    self.resolve_git_dep(name, url, rev.as_deref(), tag.as_deref(), branch.as_deref(), version.as_deref())
+                    self.resolve_git_dep(
+                        name,
+                        url,
+                        rev.as_deref(),
+                        tag.as_deref(),
+                        branch.as_deref(),
+                        version.as_deref(),
+                    )
                 } else {
                     Err(anyhow!("依赖 {} 必须设置 path 或 git", name))
                 }
@@ -318,19 +389,33 @@ impl Resolver {
         declared_version: Option<&str>,
         base_dir: &Path,
     ) -> Result<ResolvedNode> {
-        let abs = base_dir.join(rel_path).canonicalize()
+        let abs = base_dir
+            .join(rel_path)
+            .canonicalize()
             .with_context(|| format!("path 依赖 {} 不存在或无法访问: {}", name, rel_path))?;
 
         let (version, direct_deps) = if abs.join(paths::MANIFEST_FILE).exists() {
             let dep_manifest = Manifest::read_from(abs.join(paths::MANIFEST_FILE))
                 .with_context(|| format!("读取依赖 {} 的 manifest 失败", name))?;
-            (dep_manifest.version.clone(), dep_manifest.dependencies.clone())
+            (
+                dep_manifest.version.clone(),
+                dep_manifest.dependencies.clone(),
+            )
         } else {
-            (declared_version.unwrap_or("0.0.0").to_string(), BTreeMap::new())
+            (
+                declared_version.unwrap_or("0.0.0").to_string(),
+                BTreeMap::new(),
+            )
         };
 
         let id = PackageId::for_path(name, &abs);
-        Ok(ResolvedNode { name: name.to_string(), version, source: ResolvedSource::Path { abs_path: abs }, direct_deps, id })
+        Ok(ResolvedNode {
+            name: name.to_string(),
+            version,
+            source: ResolvedSource::Path { abs_path: abs },
+            direct_deps,
+            id,
+        })
     }
 
     fn resolve_git_dep(
@@ -342,7 +427,8 @@ impl Resolver {
         branch: Option<&str>,
         declared_version: Option<&str>,
     ) -> Result<ResolvedNode> {
-        let lock_rev = rev.map(|s| s.to_string())
+        let lock_rev = rev
+            .map(|s| s.to_string())
             .or_else(|| tag.map(|s| s.to_string()))
             .or_else(|| branch.map(|s| s.to_string()))
             .unwrap_or_else(|| "HEAD".to_string());
@@ -351,15 +437,25 @@ impl Resolver {
         let commit_hash = self.git_ensure_and_resolve(url, &lock_rev)?;
 
         let cache_dir = paths::project_dir(&self.root).join("cache").join("git");
-        let repo_dir = cache_dir.join(format!("{}-{}", sanitize_for_path(url), sanitize_for_path(&lock_rev)));
+        let repo_dir = cache_dir.join(format!(
+            "{}-{}",
+            sanitize_for_path(url),
+            sanitize_for_path(&lock_rev)
+        ));
 
         // 读取 git 依赖包自身的 manifest（如果存在），获取真实版本和子依赖
         let (version, direct_deps) = if repo_dir.join(paths::MANIFEST_FILE).exists() {
             let dep_manifest = Manifest::read_from(repo_dir.join(paths::MANIFEST_FILE))
                 .with_context(|| format!("读取 git 依赖 {} 的 manifest 失败", name))?;
-            (dep_manifest.version.clone(), dep_manifest.dependencies.clone())
+            (
+                dep_manifest.version.clone(),
+                dep_manifest.dependencies.clone(),
+            )
         } else {
-            (declared_version.unwrap_or("0.0.0").to_string(), BTreeMap::new())
+            (
+                declared_version.unwrap_or("0.0.0").to_string(),
+                BTreeMap::new(),
+            )
         };
 
         let id = PackageId::for_git(name, url, &commit_hash);
@@ -367,7 +463,10 @@ impl Resolver {
             name: name.to_string(),
             version,
             // rev 已是精确 commit hash
-            source: ResolvedSource::Git { url: url.to_string(), rev: commit_hash },
+            source: ResolvedSource::Git {
+                url: url.to_string(),
+                rev: commit_hash,
+            },
             direct_deps,
             id,
         })
@@ -390,11 +489,22 @@ pub fn node_to_locked_package(node: &ResolvedNode, content_sha256: String) -> Lo
         },
     };
 
-    let dependencies: Vec<LockedDep> = node.direct_deps.keys()
-        .map(|dep_name| LockedDep { name: dep_name.clone(), version: String::new() })
+    let dependencies: Vec<LockedDep> = node
+        .direct_deps
+        .keys()
+        .map(|dep_name| LockedDep {
+            name: dep_name.clone(),
+            version: String::new(),
+        })
         .collect();
 
-    LockedPackage { name: node.name.clone(), version: node.version.clone(), source, content_sha256, dependencies }
+    LockedPackage {
+        name: node.name.clone(),
+        version: node.version.clone(),
+        source,
+        content_sha256,
+        dependencies,
+    }
 }
 
 /// 计算 path 依赖目录的内容哈希
@@ -417,7 +527,8 @@ pub fn compute_path_content_hash(abs_path: &Path) -> Result<String> {
 ///   - 使用预先构建的 dependents 邻接表，pop 时只遍历直接依赖者（O(E) 而非 O(n²)）
 fn topological_sort(mut nodes: HashMap<PackageId, ResolvedNode>) -> Result<Vec<ResolvedNode>> {
     // 建立 name -> id 映射，用于从 direct_deps（按名称）查找 PackageId
-    let name_to_id: HashMap<String, PackageId> = nodes.iter()
+    let name_to_id: HashMap<String, PackageId> = nodes
+        .iter()
         .map(|(id, node)| (node.name.clone(), id.clone()))
         .collect();
 
@@ -429,14 +540,18 @@ fn topological_sort(mut nodes: HashMap<PackageId, ResolvedNode>) -> Result<Vec<R
         for dep_name in node.direct_deps.keys() {
             if let Some(dep_id) = name_to_id.get(dep_name) {
                 *in_degree.entry(id.clone()).or_insert(0) += 1;
-                dependents.entry(dep_id.clone()).or_default().push(id.clone());
+                dependents
+                    .entry(dep_id.clone())
+                    .or_default()
+                    .push(id.clone());
             }
         }
     }
 
     // 初始队列：所有入度为 0 的包，按名称排序保证稳定输出
     let mut queue: VecDeque<PackageId> = {
-        let mut zero: Vec<PackageId> = in_degree.iter()
+        let mut zero: Vec<PackageId> = in_degree
+            .iter()
             .filter(|(_, &deg)| deg == 0)
             .map(|(id, _)| id.clone())
             .collect();
@@ -471,7 +586,10 @@ fn topological_sort(mut nodes: HashMap<PackageId, ResolvedNode>) -> Result<Vec<R
 
     if !nodes.is_empty() {
         let cycle_names: Vec<_> = nodes.values().map(|n| n.name.as_str()).collect();
-        return Err(anyhow!("检测到循环依赖，涉及包：{}", cycle_names.join(", ")));
+        return Err(anyhow!(
+            "检测到循环依赖，涉及包：{}",
+            cycle_names.join(", ")
+        ));
     }
 
     Ok(result)
@@ -513,7 +631,10 @@ fn git_checkout_rev(dir: &Path, rev: &str) -> Result<()> {
             .context("执行 git checkout（fetch 后重试）失败")?;
 
         if !status2.success() {
-            return Err(anyhow!("git checkout 失败：rev/tag/branch \"{}\" 不存在", rev));
+            return Err(anyhow!(
+                "git checkout 失败：rev/tag/branch \"{}\" 不存在",
+                rev
+            ));
         }
     }
     Ok(())
@@ -533,7 +654,13 @@ fn git_rev_parse_head(dir: &Path) -> Result<String> {
 
 fn sanitize_for_path(s: &str) -> String {
     s.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -544,9 +671,21 @@ fn sanitize_for_path(s: &str) -> String {
 fn dep_spec_to_req_string(spec: &DepSpec) -> String {
     match spec {
         DepSpec::VersionReq(v) => v.clone(),
-        DepSpec::Detailed { version: Some(v), .. } => v.clone(),
-        DepSpec::Detailed { git: Some(url), rev, tag, branch, .. } => {
-            let pin = rev.as_deref().or(tag.as_deref()).or(branch.as_deref()).unwrap_or("HEAD");
+        DepSpec::Detailed {
+            version: Some(v), ..
+        } => v.clone(),
+        DepSpec::Detailed {
+            git: Some(url),
+            rev,
+            tag,
+            branch,
+            ..
+        } => {
+            let pin = rev
+                .as_deref()
+                .or(tag.as_deref())
+                .or(branch.as_deref())
+                .unwrap_or("HEAD");
             format!("git+{}#{}", url, pin)
         }
         DepSpec::Detailed { path: Some(p), .. } => format!("path:{}", p),

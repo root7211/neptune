@@ -81,7 +81,10 @@ impl Lockfile {
                 return Err(anyhow::anyhow!("lockfile 中存在 name 为空的包"));
             }
             if pkg.version.is_empty() {
-                return Err(anyhow::anyhow!("lockfile 中包 {} 的 version 为空", pkg.name));
+                return Err(anyhow::anyhow!(
+                    "lockfile 中包 {} 的 version 为空",
+                    pkg.name
+                ));
             }
             // 修复 #1：验证 content_sha256 对所有包都不应为空。
             // v0.3.1 起，Git 依赖在 resolve 阶段就会填充精确 commit hash，
