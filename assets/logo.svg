@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 480" width="400" height="480">
+  <defs>
+    <clipPath id="clip-rect">
+      <rect x="60" y="40" width="200" height="320" rx="48" ry="48"/>
+    </clipPath>
+    <clipPath id="clip-ellipse">
+      <ellipse cx="270" cy="200" rx="130" ry="160"/>
+    </clipPath>
+  </defs>
+
+  <!-- Off-white background -->
+  <rect width="400" height="480" fill="#f0f0ec"/>
+
+  <!-- Blue rounded rectangle (full, drawn first) -->
+  <rect x="60" y="40" width="200" height="320" rx="48" ry="48" fill="#3ea8f5"/>
+
+  <!-- Green ellipse (full, drawn second — covers blue where they don't overlap) -->
+  <ellipse cx="270" cy="200" rx="130" ry="160" fill="#3dd96a"/>
+
+  <!-- Purple intersection: draw the green ellipse clipped to the blue rect area -->
+  <ellipse cx="270" cy="200" rx="130" ry="160" fill="#6b3fc8" clip-path="url(#clip-rect)"/>
+
+  <!-- Also clip the blue rect to ellipse area to unify the purple region -->
+  <rect x="60" y="40" width="200" height="320" rx="48" ry="48"
+        fill="#6b3fc8" clip-path="url(#clip-ellipse)"/>
+
+  <!-- "neptune" wordmark -->
+  <text
+    x="200"
+    y="432"
+    font-family="'Inter', 'Helvetica Neue', Arial, sans-serif"
+    font-size="64"
+    font-weight="800"
+    fill="#1a1a3e"
+    text-anchor="middle"
+    letter-spacing="-1">neptune</text>
+</svg>

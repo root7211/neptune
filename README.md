@@ -1,5 +1,9 @@
 # Neptune
 
+<p align="center">
+  <img src="assets/logo.svg" alt="Neptune logo" width="200"/>
+</p>
+
 A package manager for [Nelua](https://nelua.io), written in Rust.
 
 The command-line tool is called `npt`. The goal is something close to what Cargo does for Rust — declare your dependencies, run `npt install`, and get on with writing code.
